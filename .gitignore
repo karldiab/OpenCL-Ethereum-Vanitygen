@@ -5,3 +5,7 @@ oclvanitygen
 oclvanityminer
 keyconv
 results.txt
+OpenCL-Ethereum-Vanitygen.*
+results*
+.vscode
+.vscode/*

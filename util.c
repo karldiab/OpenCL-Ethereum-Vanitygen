@@ -293,6 +293,10 @@ vg_encode_address(const EC_POINT *ppoint, const EC_GROUP *pgroup,
 			   eckey_buf,
 			   sizeof(eckey_buf),
 			   NULL);
+	// printf("eckey buff:\n");
+	// for (int i = 0; i < 128;i++)
+	// 	printf("%02x",eckey_buf[i]);
+	// printf("\n");
 	pend = eckey_buf + 0x41;
 	binres[0] = addrtype;
 	SHA256(eckey_buf, pend - eckey_buf, hash1);
@@ -356,20 +360,21 @@ vg_encode_script_address(const EC_POINT *ppoint, const EC_GROUP *pgroup,
 void
 vg_encode_privkey(const EC_KEY *pkey, int addrtype, char *result)
 {
-	unsigned char eckey_buf[128];
+	//unsigned char eckey_buf[128];
 	const BIGNUM *bn;
-	int nbytes;
+	//int nbytes;
 
 	bn = EC_KEY_get0_private_key(pkey);
+	strcpy(result, BN_bn2hex(bn));
+	//printf("privkey in hex: %s\n",BN_bn2hex(bn));
+	// eckey_buf[0] = addrtype;
+	// nbytes = BN_num_bytes(bn);
+	// assert(nbytes <= 32);
+	// if (nbytes < 32)
+	// 	memset(eckey_buf + 1, 0, 32 - nbytes);
+	// BN_bn2bin(bn, &eckey_buf[33 - nbytes]);
 
-	eckey_buf[0] = addrtype;
-	nbytes = BN_num_bytes(bn);
-	assert(nbytes <= 32);
-	if (nbytes < 32)
-		memset(eckey_buf + 1, 0, 32 - nbytes);
-	BN_bn2bin(bn, &eckey_buf[33 - nbytes]);
-
-	vg_b58_encode_check(eckey_buf, 33, result);
+	// vg_b58_encode_check(eckey_buf, 33, result);
 }
 
 void

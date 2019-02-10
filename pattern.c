@@ -501,6 +501,7 @@ vg_output_timing_console(vg_context_t *vcp, double count,
 	fflush(stdout);
 }
 
+//called when a vanity addr is found
 void
 vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern)
 {
@@ -528,14 +529,9 @@ vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern)
 	}
 
 	assert(EC_KEY_check_key(pkey));
-	if (vcp->vc_compressed)
-		vg_encode_address_compressed(ppnt,
-				  EC_KEY_get0_group(pkey),
-				  vcp->vc_pubkeytype, addr_buf);
-	else
-		vg_encode_address(ppnt,
-				  EC_KEY_get0_group(pkey),
-				  vcp->vc_pubkeytype, addr_buf);
+	vg_encode_address(ppnt,
+				EC_KEY_get0_group(pkey),
+				vcp->vc_pubkeytype, addr_buf);
 	if (isscript)
 		vg_encode_script_address(ppnt,
 					 EC_KEY_get0_group(pkey),
@@ -613,6 +609,7 @@ vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern)
 		else {
 			if (isscript)
 				printf("P2SH%s Address: %s\n", ticker, addr2_buf);
+			//Vanity addr found outputs here
 			printf("%sAddress: %s\n"
 			       "%s%s: %s\n",
 			       ticker, addr_buf, ticker, keytype, privkey_buf);
@@ -1037,6 +1034,7 @@ vg_prefix_free(vg_prefix_t *vp)
 static vg_prefix_t *
 vg_prefix_avl_search(avl_root_t *rootp, BIGNUM *targ)
 {
+	//printf("targ = %s\n",BN_bn2hex(targ));
 	vg_prefix_t *vp;
 	avl_item_t *itemp = rootp->ar_root;
 
@@ -1521,7 +1519,9 @@ vg_prefix_get_difficulty(int addrtype, const char *pattern)
 	return diffret;
 }
 
-
+//this determines if we've found a winning address
+//returns 1 if address matches and we want to keep going, 
+//2 means we found it, now exit, everything else means no match
 static int
 vg_prefix_test(vg_exec_context_t *vxcp)
 {
@@ -1534,7 +1534,11 @@ vg_prefix_test(vg_exec_context_t *vxcp)
 	 * a match without generating the lower four byte
 	 * check code.
 	 */
-
+	// printf("vxcp->vxc_binres: ");
+	// for (int k = 12; k < 32;k++)
+	// printf("%02x",vxcp->vxc_binres[k]);
+	// printf("\n");
+	// BN_bin2bn(vxcp->vxc_binres+12, 200, vxcp->vxc_bntarg);
 	BN_bin2bn(vxcp->vxc_binres, 25, vxcp->vxc_bntarg);
 
 research:
