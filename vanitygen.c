@@ -50,8 +50,8 @@ void *
 vg_thread_loop(void *arg)
 {
 	unsigned char buf[32];
-	unsigned char hash_buf[128];
-	unsigned char *eckey_buf;
+	unsigned char hash_buf[128], *pend;
+	unsigned char eckey_buf[128];
 	unsigned char hash1[32];
 
 	int i, c, len, output_interval;
@@ -110,19 +110,6 @@ vg_thread_loop(void *arg)
 	c = 0;
 	output_interval = 1000;
 	gettimeofday(&tvstart, NULL);
-	if (vcp->vc_format == VCF_SCRIPT) {
-		hash_buf[ 0] = 0x51;  // OP_1
-		hash_buf[ 1] = 0x41;  // pubkey length
-		// gap for pubkey
-		hash_buf[67] = 0x51;  // OP_1
-		hash_buf[68] = 0xae;  // OP_CHECKMULTISIG
-		eckey_buf = hash_buf + 2;
-		hash_len = 69;
-
-	} else {
-		eckey_buf = hash_buf;
-		hash_len = (vcp->vc_compressed)?33:65;
-	}
 
 	while (!vcp->vc_halt) {
 		if (++npoints >= rekey_at) {
@@ -202,14 +189,13 @@ vg_thread_loop(void *arg)
 		EC_POINTs_make_affine(pgroup, nbatch, ppnt, vxcp->vxc_bnctx);
 
 		for (i = 0; i < nbatch; i++, vxcp->vxc_delta++) {
-			/* Hash the public key */
-			len = EC_POINT_point2oct(pgroup, ppnt[i],
-						 POINT_CONVERSION_UNCOMPRESSED,
-						 eckey_buf,
-						 65,
-						 vxcp->vxc_bnctx);
+			EC_KEY_generate_key(pkey);
+			pend = eckey_buf;
+			len = i2o_ECPublicKey(pkey, &pend);
 			assert(len == 65 || len == 33);
-			// printf("eckey_buf: ");
+			// printf("\n\nmy priv key: ");
+			// dumpbn(EC_KEY_get0_private_key(pkey));
+			// printf("pubkey after: ");
 			// for (int k = 0; k < 65;k++)
 			// printf("%02x",eckey_buf[k]);
 			// printf("\n");
@@ -217,7 +203,7 @@ vg_thread_loop(void *arg)
 			//RIPEMD160(hash1, sizeof(hash1), &vxcp->vxc_binres[1]);
 			//sha3_HashBuffer(256, SHA3_FLAGS_KECCAK, &eckey_buf[1], 64, buf, sizeof(buf));
 			sha3_HashBuffer(256, SHA3_FLAGS_KECCAK, eckey_buf+1, 64, vxcp->vxc_binres, 32);
-			// printf("ETH address eckey_buf: 0x");
+			// printf("ETH address generated: 0x");
 			// for (int k = 12; k < 32;k++)
 			// printf("%02x",vxcp->vxc_binres[k]);
 			// printf("\n");
