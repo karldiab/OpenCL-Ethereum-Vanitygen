@@ -76,7 +76,7 @@ typedef int (*vg_test_func_t)(vg_exec_context_t *,vg_context_t *);
 typedef int (*vg_hash160_sort_func_t)(vg_context_t *vcp, void *buf);
 typedef void (*vg_output_error_func_t)(vg_context_t *vcp, const char *info);
 typedef void (*vg_output_match_func_t)(vg_context_t *vcp, EC_KEY *pkey,
-				       const char *pattern);
+				       const char *pattern, unsigned char *address);
 typedef void (*vg_output_timing_func_t)(vg_context_t *vcp, double count,
 					unsigned long long rate,
 					unsigned long long total);
@@ -92,6 +92,7 @@ struct _vg_context_s {
 	int			vc_addrtype;
 	int			vc_privtype;
 	unsigned char		**vc_search_patterns;
+	char 				**vc_pattern_strings;
 	unsigned long		vc_npatterns;
 	unsigned long		vc_npatterns_start;
 	unsigned long long	vc_found;
@@ -156,7 +157,7 @@ extern vg_context_t *vg_regex_context_new(int addrtype, int privtype);
 /* Utility functions */
 extern int vg_output_timing(vg_context_t *vcp, int cycle, struct timeval *last);
 extern void vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey,
-				    const char *pattern);
+				    const char *pattern, unsigned char *address);
 extern void vg_output_timing_console(vg_context_t *vcp, double count,
 				     unsigned long long rate,
 				     unsigned long long total);

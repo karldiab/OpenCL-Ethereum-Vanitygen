@@ -503,59 +503,23 @@ vg_output_timing_console(vg_context_t *vcp, double count,
 
 //called when a vanity addr is found
 void
-vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern)
+vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern, unsigned char *address)
 {
 	unsigned char key_buf[512], *pend;
-	char addr_buf[64], addr2_buf[64];
+	char addr_buf[40];
 	char privkey_buf[VG_PROTKEY_MAX_B58];
 	const char *keytype = "Privkey";
 	int len;
-	int isscript = (vcp->vc_format == VCF_SCRIPT);
-
+	//printf("addrbuff %s",addr_buf);
 	EC_POINT *ppnt;
 	int free_ppnt = 0;
-	if (vcp->vc_pubkey_base) {
-		ppnt = EC_POINT_new(EC_KEY_get0_group(pkey));
-		EC_POINT_copy(ppnt, EC_KEY_get0_public_key(pkey));
-		EC_POINT_add(EC_KEY_get0_group(pkey),
-			     ppnt,
-			     ppnt,
-			     vcp->vc_pubkey_base,
-			     NULL);
-		free_ppnt = 1;
-		keytype = "PrivkeyPart";
-	} else {
-		ppnt = (EC_POINT *) EC_KEY_get0_public_key(pkey);
+	ppnt = (EC_POINT *) EC_KEY_get0_public_key(pkey);
+	for (size_t i = 0; i < 20; i++) {
+		sprintf(addr_buf+2*i,"%02x",address[i]);
 	}
-
+	
 	assert(EC_KEY_check_key(pkey));
-	vg_encode_address(ppnt,
-				EC_KEY_get0_group(pkey),
-				vcp->vc_pubkeytype, addr_buf);
-	if (isscript)
-		vg_encode_script_address(ppnt,
-					 EC_KEY_get0_group(pkey),
-					 vcp->vc_addrtype, addr2_buf);
-
-	if (vcp->vc_key_protect_pass) {
-		len = vg_protect_encode_privkey(privkey_buf,
-						pkey, vcp->vc_privtype,
-						VG_PROTKEY_DEFAULT,
-						vcp->vc_key_protect_pass);
-		if (len) {
-			keytype = "Protkey";
-		} else {
-			fprintf(stderr,
-				"ERROR: could not password-protect key\n");
-			vcp->vc_key_protect_pass = NULL;
-		}
-	}
-	if (!vcp->vc_key_protect_pass) {
-		if (vcp->vc_compressed)
-			vg_encode_privkey_compressed(pkey, vcp->vc_privtype, privkey_buf);
-		else
-			vg_encode_privkey(pkey, vcp->vc_privtype, privkey_buf);
-	}
+	vg_encode_privkey(pkey, vcp->vc_privtype, privkey_buf);
 
 	int tickerlength=0;
 	if (vcp->vc_csv) {
@@ -592,23 +556,15 @@ vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern)
 
 	if (!vcp->vc_result_file || (vcp->vc_verbose > 0)) {
 		if (vcp->vc_csv) {
-			if (isscript) {
-				printf(
-				"%s,",
-				addr2_buf);
-			}
-			else {
-				printf(
-				"%s,",
-				addr_buf);
-			}
+			printf(
+			"%s,",
+			addr_buf);
+			
 			printf(
 				"%s\n",
 				privkey_buf);
 		}
 		else {
-			if (isscript)
-				printf("P2SH%s Address: %s\n", ticker, addr2_buf);
 			//Vanity addr found outputs here
 			printf("%sAddress: %s\n"
 			       "%s%s: %s\n",
@@ -627,16 +583,9 @@ vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern)
 				fprintf(fp,
 					"%.*s,%s,",
 					tickerlength,ticker, pattern);
-				if (isscript) {
-					fprintf(fp,
-					"%s,",
-					addr2_buf);
-				}
-				else {
 					fprintf(fp,
 					"%s,",
 					addr_buf);
-				}
 				fprintf(fp,
 					"%s\n",
 					privkey_buf);
@@ -646,8 +595,6 @@ vg_output_match_console(vg_context_t *vcp, EC_KEY *pkey, const char *pattern)
 				fprintf(fp,
 					"%sPattern: %s\n"
 					, ticker, pattern);
-				if (isscript)
-					fprintf(fp, "P2SH%s Address: %s\n", ticker, addr2_buf);
 				fprintf(fp,
 					"%sAddress: %s\n"
 					"%s%s: %s\n",
@@ -1338,7 +1285,7 @@ vg_prefix_context_add_patterns(vg_context_t *vcp,
 	
 	for (i = 0; i < npatterns; i++) {
 		//always case insensitive for now
-		
+		strcpy(vcp->vc_pattern_strings[i],patterns[i]);
 		if (0 && !vcpp->vcp_caseinsensitive) {
 		} else {
 			size_t length = strlen(patterns[i]);
@@ -1359,11 +1306,11 @@ vg_prefix_context_add_patterns(vg_context_t *vcp,
 			//return 0;
 			//save the length of each pattern in the last index
 			vcp->vc_search_patterns[i][31] = length;
-			printf("pattern %s saved as ",patterns[i]);
-			for (size_t j = 0; j < 32; j++) {
-				printf("%02x",vcp->vc_search_patterns[i][j]);
-			}
-			printf("\n");
+			// printf("pattern %s saved as ",patterns[i]);
+			// for (size_t j = 0; j < 32; j++) {
+			// 	printf("%02x",vcp->vc_search_patterns[i][j]);
+			// }
+			// printf("\n");
 		}
 
 	}
@@ -1443,6 +1390,8 @@ vg_prefix_test(vg_exec_context_t *vxcp, vg_context_t *vcp)
 			// for (int k = 12; k < 32;k++)
 			// printf("%02x",vxcp->vxc_binres[k]);
 			// printf(" is a match!\n");
+			vcpp->base.vc_output_match(&vcpp->base, vxcp->vxc_key,
+						   vcp->vc_pattern_strings[i],&vxcp->vxc_binres[12]);
 			vcpp->base.vc_found++;
 			if (vcpp->base.vc_numpairs >= 1 && vcpp->base.vc_found >= vcpp->base.vc_numpairs) {
 				exit(1);
@@ -1647,113 +1596,7 @@ vg_regex_context_free(vg_context_t *vcp)
 static int
 vg_regex_test(vg_exec_context_t *vxcp)
 {
-	vg_regex_context_t *vcrp = (vg_regex_context_t *) vxcp->vxc_vc;
-
-	unsigned char hash1[32], hash2[32];
-	int i, zpfx, p, d, nres, re_vec[9];
-	char b58[40];
-	BIGNUM *bnrem;
-	BIGNUM *bn, *bndiv, *bnptmp;
-	int res = 0;
-
-	pcre *re;
-
-	bnrem = BN_new();
-
-	/* Hash the hash and write the four byte check code */
-	SHA256(vxcp->vxc_binres, 21, hash1);
-	SHA256(hash1, sizeof(hash1), hash2);
-	memcpy(&vxcp->vxc_binres[21], hash2, 4);
-
-	bn = vxcp->vxc_bntmp;
-	bndiv = vxcp->vxc_bntmp2;
-
-	BN_bin2bn(vxcp->vxc_binres, 25, bn);
-
-	/* Compute the complete encoded address */
-	for (zpfx = 0; zpfx < 25 && vxcp->vxc_binres[zpfx] == 0; zpfx++);
-	p = sizeof(b58) - 1;
-	b58[p] = '\0';
-	while (!BN_is_zero(bn)) {
-		BN_div(bndiv, bnrem, bn, vxcp->vxc_bnbase, vxcp->vxc_bnctx);
-		bnptmp = bn;
-		bn = bndiv;
-		bndiv = bnptmp;
-		d = BN_get_word(bnrem);
-		b58[--p] = vg_b58_alphabet[d];
-	}
-	while (zpfx--) {
-		b58[--p] = vg_b58_alphabet[0];
-	}
-
-	/*
-	 * Run the regular expressions on it
-	 * SLOW, runs in linear time with the number of REs
-	 */
-restart_loop:
-	nres = vcrp->base.vc_npatterns;
-	if (!nres) {
-		res = 2;
-		goto out;
-	}
-	for (i = 0; i < nres; i++) {
-		d = pcre_exec(vcrp->vcr_regex[i],
-			      vcrp->vcr_regex_extra[i],
-			      &b58[p], (sizeof(b58) - 1) - p, 0,
-			      0,
-			      re_vec, sizeof(re_vec)/sizeof(re_vec[0]));
-
-		if (d <= 0) {
-			if (d != PCRE_ERROR_NOMATCH) {
-				fprintf(stderr, "PCRE error: %d\n", d);
-				res = 2;
-				goto out;
-			}
-			continue;
-		}
-
-		re = vcrp->vcr_regex[i];
-
-		if (vg_exec_context_upgrade_lock(vxcp) &&
-		    ((i >= vcrp->base.vc_npatterns) ||
-		     (vcrp->vcr_regex[i] != re)))
-			goto restart_loop;
-
-		vg_exec_context_consolidate_key(vxcp);
-		vcrp->base.vc_output_match(&vcrp->base, vxcp->vxc_key,
-					   vcrp->vcr_regex_pat[i]);
-		vcrp->base.vc_found++;
-
-		if (vcrp->base.vc_numpairs >= 1 && vcrp->base.vc_found >= vcrp->base.vc_numpairs) {
-			exit(1);
-		}
-		if (vcrp->base.vc_only_one) {
-			res = 2;
-			goto out;
-		}
-
-		if (vcrp->base.vc_remove_on_match) {
-			pcre_free(vcrp->vcr_regex[i]);
-			if (vcrp->vcr_regex_extra[i])
-				pcre_free(vcrp->vcr_regex_extra[i]);
-			nres -= 1;
-			vcrp->base.vc_npatterns = nres;
-			if (!nres) {
-				res = 2;
-				goto out;
-			}
-			vcrp->vcr_regex[i] = vcrp->vcr_regex[nres];
-			vcrp->vcr_regex_extra[i] =
-				vcrp->vcr_regex_extra[nres];
-			vcrp->vcr_regex_pat[i] = vcrp->vcr_regex_pat[nres];
-			vcrp->base.vc_npatterns = nres;
-			vcrp->base.vc_pattern_generation++;
-		}
-		res = 1;
-	}
-out:
-	BN_clear_free(bnrem);
-	return res;
+	return 0;
 }
 
 vg_context_t *

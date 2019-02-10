@@ -110,7 +110,6 @@ vg_thread_loop(void *arg)
 	c = 0;
 	output_interval = 1000;
 	gettimeofday(&tvstart, NULL);
-	//printf("does it? %d\n",vcp->vc_format == VCF_SCRIPT);
 	if (vcp->vc_format == VCF_SCRIPT) {
 		hash_buf[ 0] = 0x51;  // OP_1
 		hash_buf[ 1] = 0x41;  // pubkey length
@@ -564,9 +563,13 @@ main(int argc, char **argv)
 		}
 		patterns = &argv[optind];
 		npatterns = argc - optind;
-		vcp->vc_search_patterns = (char**)calloc(npatterns,sizeof(char*));//malloc(sizeof(char*)*32*npatterns);
+		vcp->vc_search_patterns = (char**)calloc(npatterns,sizeof(char*));
 		for (size_t count = 0; count < npatterns;count++) {
 			vcp->vc_search_patterns[count] = (char*)calloc(32,sizeof(char));
+		}
+		vcp->vc_pattern_strings = (char**)calloc(npatterns,sizeof(char*));
+		for (size_t count = 0; count < npatterns;count++) {
+			vcp->vc_pattern_strings[count] = (char*)calloc(32,sizeof(char));
 		}
 		if (!vg_context_add_patterns(vcp,
 					     (const char const **) patterns,
