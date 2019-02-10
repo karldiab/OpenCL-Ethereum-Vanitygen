@@ -1329,152 +1329,47 @@ vg_prefix_context_next_difficulty(vg_prefix_context_t *vcpp,
 
 static int
 vg_prefix_context_add_patterns(vg_context_t *vcp,
-			       const char ** const patterns, int npatterns)
+			     const char const **patterns, int npatterns)
 {
 	vg_prefix_context_t *vcpp = (vg_prefix_context_t *) vcp;
-	prefix_case_iter_t caseiter;
-	vg_prefix_t *vp, *vp2;
-	BN_CTX *bnctx;
-	BIGNUM *bntmp, *bntmp2, *bntmp3;
-	BIGNUM *ranges[4];
 	int ret = 0;
-	int i, impossible = 0;
-	int case_impossible;
+	int i,j;
 	unsigned long npfx;
-	char *dbuf;
-
-	bnctx = BN_CTX_new();
-	bntmp = BN_new();
-	bntmp2 = BN_new();
-	bntmp3 = BN_new();
-
-	npfx = 0;
+	
 	for (i = 0; i < npatterns; i++) {
-		if (!vcpp->vcp_caseinsensitive) {
-			vp = NULL;
-			ret = get_prefix_ranges(vcpp->base.vc_addrtype,
-						patterns[i],
-						ranges, bnctx);
-			if (!ret) {
-				vp = vg_prefix_add_ranges(&vcpp->vcp_avlroot,
-							  patterns[i],
-							  ranges, NULL);
-			}
-
+		//always case insensitive for now
+		
+		if (0 && !vcpp->vcp_caseinsensitive) {
 		} else {
-			/* Case-enumerate the prefix */
-			if (!prefix_case_iter_init(&caseiter, patterns[i])) {
-				fprintf(stderr,
-					"Prefix '%s' is too long, lets try it anyways!\n",
-					patterns[i]);
-				continue;
-			}
-
-			if (caseiter.ci_nbits > 16) {
-				fprintf(stderr,
-					"WARNING: Prefix '%s' has "
-					"2^%d case-varied derivatives\n",
-					patterns[i], caseiter.ci_nbits);
-			}
-
-			case_impossible = 0;
-			vp = NULL;
-			do {
-				ret = get_prefix_ranges(vcpp->base.vc_addrtype,
-							caseiter.ci_prefix,
-							ranges, bnctx);
-				if (ret == -2) {
-					case_impossible++;
-					ret = 0;
-					continue;
+			size_t length = strlen(patterns[i]);
+			for (size_t k = 0; k < length; k++) {
+				ret = isxdigit((int)patterns[i][k]);
+				if (!ret) {
+				fprintf(stderr,"Prefix '%s' is not valid hex! Exiting.\n", patterns[i]);
+				return ret;
 				}
-				if (ret)
-					break;
-				vp2 = vg_prefix_add_ranges(&vcpp->vcp_avlroot,
-							   patterns[i],
-							   ranges,
-							   vp);
-				if (!vp2) {
-					ret = -1;
-					break;
-				}
-				if (!vp)
-					vp = vp2;
-
-			} while (prefix_case_iter_next(&caseiter));
-
-			if (!vp && case_impossible)
-				ret = -2;
-
-			if (ret && vp) {
-				vg_prefix_delete(&vcpp->vcp_avlroot, vp);
-				vp = NULL;
 			}
+			char *pos = patterns[i];
+			for (size_t count = 0; count*2 < length; count++) {
+				//printf("count = %u pos = %u 2hhx = %2hhx patterns[i][pos] = %c%c\n", count,pos,patterns[i][pos],patterns[i][pos],patterns[i][pos]+1);
+				//sscanf(patterns[i][pos], "%2hhx", vcp->vc_search_patterns[i][count]);
+				sscanf(pos, "%2hhx", &vcp->vc_search_patterns[i][count]);//&val[count]);
+				pos += 2 * sizeof(char);
+			}
+			//return 0;
+			//save the length of each pattern in the last index
+			vcp->vc_search_patterns[i][31] = length;
+			printf("pattern %s saved as ",patterns[i]);
+			for (size_t j = 0; j < 32; j++) {
+				printf("%02x",vcp->vc_search_patterns[i][j]);
+			}
+			printf("\n");
 		}
 
-		if (ret == -2) {
-			fprintf(stderr,
-				"Prefix '%s' not possible\n", patterns[i]);
-			impossible++;
-		}
-
-		if (!vp)
-			continue;
-
-		npfx++;
-
-		/* Determine the probability of finding a match */
-		vg_prefix_range_sum(vp, bntmp, bntmp2);
-		BN_add(bntmp2, vcpp->vcp_difficulty, bntmp);
-		BN_copy(vcpp->vcp_difficulty, bntmp2);
-
-		if (vcp->vc_verbose > 1) {
-			BN_clear(bntmp2);
-			BN_set_bit(bntmp2, 192);
-			BN_div(bntmp3, NULL, bntmp2, bntmp, bnctx);
-
-			dbuf = BN_bn2dec(bntmp3);
-			fprintf(stderr,
-				"Prefix difficulty: %20s %s\n",
-				dbuf, patterns[i]);
-			OPENSSL_free(dbuf);
-		}
 	}
 
-	vcpp->base.vc_npatterns += npfx;
-	vcpp->base.vc_npatterns_start += npfx;
-
-	if (!npfx && impossible) {
-//		const char *ats = "bitcoin", *bw = "\"1\"";
-		switch (vcpp->base.vc_addrtype) {
-/*		case 5:
-			ats = "bitcoin script";
-			bw = "\"3\"";
-			break;
-		case 111:
-			ats = "testnet";
-			bw = "\"m\" or \"n\"";
-			break;
-		case 52:
-			ats = "namecoin";
-			bw = "\"M\" or \"N\"";
-			break;
-*/		default:
-			break;
-		}
-		fprintf(stderr,
-			"Hint: Run vanitygen with \"-C LIST\" for a list of valid prefixes.  Also note that many coins only allow certain characters as the second character in the prefix.\n");
-	}
-
-	if (npfx)
-		vg_prefix_context_next_difficulty(vcpp, bntmp, bntmp2, bnctx);
-
-	ret = (npfx != 0);
-
-	BN_clear_free(bntmp);
-	BN_clear_free(bntmp2);
-	BN_clear_free(bntmp3);
-	BN_CTX_free(bnctx);
+	vcpp->base.vc_npatterns = npatterns;
+	//skip check for now
 	return ret;
 }
 
@@ -1523,67 +1418,42 @@ vg_prefix_get_difficulty(int addrtype, const char *pattern)
 //returns 1 if address matches and we want to keep going, 
 //2 means we found it, now exit, everything else means no match
 static int
-vg_prefix_test(vg_exec_context_t *vxcp)
+vg_prefix_test(vg_exec_context_t *vxcp, vg_context_t *vcp)
 {
 	vg_prefix_context_t *vcpp = (vg_prefix_context_t *) vxcp->vxc_vc;
 	vg_prefix_t *vp;
-	int res = 0;
-
-	/*
-	 * We constrain the prefix so that we can check for
-	 * a match without generating the lower four byte
-	 * check code.
-	 */
-	// printf("vxcp->vxc_binres: ");
-	// for (int k = 12; k < 32;k++)
-	// printf("%02x",vxcp->vxc_binres[k]);
-	// printf("\n");
-	// BN_bin2bn(vxcp->vxc_binres+12, 200, vxcp->vxc_bntarg);
-	BN_bin2bn(vxcp->vxc_binres, 25, vxcp->vxc_bntarg);
-
-research:
-	vp = vg_prefix_avl_search(&vcpp->vcp_avlroot, vxcp->vxc_bntarg);
-	if (vp) {
-		if (vg_exec_context_upgrade_lock(vxcp))
-			goto research;
-
-		vg_exec_context_consolidate_key(vxcp);
-		vcpp->base.vc_output_match(&vcpp->base, vxcp->vxc_key,
-					   vp->vp_pattern);
-
-		vcpp->base.vc_found++;
-		if (vcpp->base.vc_numpairs >= 1 && vcpp->base.vc_found >= vcpp->base.vc_numpairs) {
-			exit(1);
+	int res = 0, found;
+	for (size_t i = 0; i < vcp->vc_npatterns; i++) {
+		for (size_t j = 0; j < vcp->vc_search_patterns[i][31]; j+=2) {
+			if (j+2 > vcp->vc_search_patterns[i][31]) {
+				found = vxcp->vxc_binres[12+j/2]>>4==vcp->vc_search_patterns[i][j/2];
+				//printf("vxcp->vxc_binres[12+j/2]>>4 = %02x vcp->vc_search_patterns[i][j/2] %02x found = %d\n",vxcp->vxc_binres[12+j/2]>>4,vcp->vc_search_patterns[i][j/2],found);
+				if (!found) {
+					break;
+				}
+			} else {
+				found = vxcp->vxc_binres[12+j/2]==vcp->vc_search_patterns[i][j/2];
+				//printf("vxcp->vxc_binres[12+j/2] = %02x vcp->vc_search_patterns[i][j/2] %02x found = %d\n",vxcp->vxc_binres[12+j/2],vcp->vc_search_patterns[i][j/2],found);
+				if (!found) {
+					break;
+				}
+			}
 		}
-		if (vcpp->base.vc_only_one) {
-			return 2;
+		if (found) {
+			// for (int k = 12; k < 32;k++)
+			// printf("%02x",vxcp->vxc_binres[k]);
+			// printf(" is a match!\n");
+			vcpp->base.vc_found++;
+			if (vcpp->base.vc_numpairs >= 1 && vcpp->base.vc_found >= vcpp->base.vc_numpairs) {
+				exit(1);
+			}
+			if (vcpp->base.vc_only_one) {
+				return 2;
+			}
+			res = 1;
 		}
-
-		if (vcpp->base.vc_remove_on_match) {
-			/* Subtract the range from the difficulty */
-			vg_prefix_range_sum(vp,
-					    vxcp->vxc_bntarg,
-					    vxcp->vxc_bntmp);
-			BN_sub(vxcp->vxc_bntmp,
-			       vcpp->vcp_difficulty,
-			       vxcp->vxc_bntarg);
-			BN_copy(vcpp->vcp_difficulty, vxcp->vxc_bntmp);
-
-			vg_prefix_delete(&vcpp->vcp_avlroot,vp);
-			vcpp->base.vc_npatterns--;
-
-			if (!avl_root_empty(&vcpp->vcp_avlroot))
-				vg_prefix_context_next_difficulty(
-					vcpp, vxcp->vxc_bntmp,
-					vxcp->vxc_bntmp2,
-					vxcp->vxc_bnctx);
-			vcpp->base.vc_pattern_generation++;
-		}
-		res = 1;
 	}
-	if (avl_root_empty(&vcpp->vcp_avlroot)) {
-		return 2;
-	}
+	//printf("no match!\n");
 	return res;
 }
 

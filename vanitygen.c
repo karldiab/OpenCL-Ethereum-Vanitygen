@@ -218,12 +218,12 @@ vg_thread_loop(void *arg)
 			//RIPEMD160(hash1, sizeof(hash1), &vxcp->vxc_binres[1]);
 			//sha3_HashBuffer(256, SHA3_FLAGS_KECCAK, &eckey_buf[1], 64, buf, sizeof(buf));
 			sha3_HashBuffer(256, SHA3_FLAGS_KECCAK, eckey_buf+1, 64, vxcp->vxc_binres, 32);
-			printf("ETH address eckey_buf: 0x");
-			for (int k = 12; k < 32;k++)
-			printf("%02x",vxcp->vxc_binres[k]);
-			printf("\n");
+			// printf("ETH address eckey_buf: 0x");
+			// for (int k = 12; k < 32;k++)
+			// printf("%02x",vxcp->vxc_binres[k]);
+			// printf("\n");
 
-			switch (test_func(vxcp)) {
+			switch (test_func(vxcp, vcp)) {
 			case 1:
 				npoints = 0;
 				rekey_at = 0;
@@ -352,6 +352,7 @@ version, name);
 int
 main(int argc, char **argv)
 {
+	
 	int addrtype = 0;
 	int scriptaddrtype = 5;
 	int privtype = 128;
@@ -549,6 +550,7 @@ main(int argc, char **argv)
 	vcp->vc_format = format;
 	vcp->vc_pubkeytype = pubkeytype;
 	vcp->vc_pubkey_base = pubkey_base;
+	//vcp->vc_search_patterns = hashmap_new();
 	memcpy(vcp->vc_privkey_prefix, privkey_prefix, privkey_prefix_length);
 	vcp->vc_privkey_prefix_length = privkey_prefix_length;
 
@@ -562,9 +564,12 @@ main(int argc, char **argv)
 		}
 		patterns = &argv[optind];
 		npatterns = argc - optind;
-
+		vcp->vc_search_patterns = (char**)calloc(npatterns,sizeof(char*));//malloc(sizeof(char*)*32*npatterns);
+		for (size_t count = 0; count < npatterns;count++) {
+			vcp->vc_search_patterns[count] = (char*)calloc(32,sizeof(char));
+		}
 		if (!vg_context_add_patterns(vcp,
-					     (const char ** const) patterns,
+					     (const char const **) patterns,
 					     npatterns))
 		return 1;
 	}
