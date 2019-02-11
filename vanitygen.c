@@ -112,7 +112,6 @@ vg_thread_loop(void *arg)
 	gettimeofday(&tvstart, NULL);
 
 	while (!vcp->vc_halt) {
-		if (++npoints >= rekey_at) {
 			vg_exec_context_upgrade_lock(vxcp);
 			/* Generate a new random private key */
 			EC_KEY_generate_key(pkey);
@@ -128,22 +127,11 @@ vg_thread_loop(void *arg)
 			       vxcp->vxc_bntmp,
 			       EC_KEY_get0_private_key(pkey));
 			rekey_at = BN_get_word(vxcp->vxc_bntmp2);
-			if ((rekey_at == 0xffffffffL) || (rekey_at > rekey_max))
-				rekey_at = rekey_max;
-			assert(rekey_at > 0);
 
-			EC_POINT_copy(ppnt[0], EC_KEY_get0_public_key(pkey));
-			vg_exec_context_downgrade_lock(vxcp);
 
 			npoints++;
 			vxcp->vxc_delta = 0;
 
-			if (vcp->vc_pubkey_base)
-				EC_POINT_add(pgroup,
-					     ppnt[0],
-					     ppnt[0],
-					     vcp->vc_pubkey_base,
-					     vxcp->vxc_bnctx);
 
 			for (nbatch = 1;
 			     (nbatch < ptarraysize) && (npoints < rekey_at);
@@ -154,45 +142,10 @@ vg_thread_loop(void *arg)
 					     pgen, vxcp->vxc_bnctx);
 			}
 
-		} else {
-			/*
-			 * Common case
-			 *
-			 * EC_POINT_add() can skip a few multiplies if
-			 * one or both inputs are affine (Z_is_one).
-			 * This is the case for every point in ppnt, as
-			 * well as pbatchinc.
-			 */
-			assert(nbatch == ptarraysize);
-			for (nbatch = 0;
-			     (nbatch < ptarraysize) && (npoints < rekey_at);
-			     nbatch++, npoints++) {
-				EC_POINT_add(pgroup,
-					     ppnt[nbatch],
-					     ppnt[nbatch],
-					     pbatchinc,
-					     vxcp->vxc_bnctx);
-			}
-		}
-
-		/*
-		 * The single most expensive operation performed in this
-		 * loop is modular inversion of ppnt->Z.  There is an
-		 * algorithm implemented in OpenSSL to do batched inversion
-		 * that only does one actual BN_mod_inverse(), and saves
-		 * a _lot_ of time.
-		 *
-		 * To take advantage of this, we batch up a few points,
-		 * and feed them to EC_POINTs_make_affine() below.
-		 */
-
-		EC_POINTs_make_affine(pgroup, nbatch, ppnt, vxcp->vxc_bnctx);
-
 		for (i = 0; i < nbatch; i++, vxcp->vxc_delta++) {
 			EC_KEY_generate_key(pkey);
 			pend = eckey_buf;
 			len = i2o_ECPublicKey(pkey, &pend);
-			assert(len == 65 || len == 33);
 			// printf("\n\nmy priv key: ");
 			// dumpbn(EC_KEY_get0_private_key(pkey));
 			// printf("pubkey after: ");
