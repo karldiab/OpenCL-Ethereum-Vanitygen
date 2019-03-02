@@ -1,4 +1,7 @@
 
+Still in development! Only CPU finder working so far, OpenCL version coming soon!
+
+
 A fork of Vanitygen Plus to include OpenCL Ethereum addresses. CPU support for ETH not guarenteed to work yet. I haven't verified the security of the previously available coins from Vanitygen Plus so they are removed, I recommend using the original Vanitygen Plus for those!
 
 oclvanityminer removed from this project.
